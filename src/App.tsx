@@ -215,21 +215,32 @@ const useData = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const EVENTS_API_URL =
+    'https://script.google.com/macros/s/AKfycby8G0CUQ4tI-q7nrdB-9AXO90dxKSfyGJrfHc6Gd-xgXl-1M-hWmnowROFpEni4Rt1d/exec';
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('https://script.google.com/macros/s/AKfycby8G0CUQ4tI-q7nrdB-9AXO90dxKSfyGJrfHc6Gd-xgXl-1M-hWmnowROFpEni4Rt1d/exec');
+      const separator = EVENTS_API_URL.includes('?') ? '&' : '?';
+      const requestUrl = `${EVENTS_API_URL}${separator}_=${Date.now()}`;
+      const response = await fetch(requestUrl, { cache: 'no-store' });
       const data = await response.json();
       
       if (data && data.eventos) {
         const now = new Date();
         const weekStart = startOfWeek(now, { weekStartsOn: 0 });
+        const dayById = new Map<string, number>();
 
-        const mappedEvents: Event[] = data.eventos.map((e: any) => {
-          // Map dia_semana to date in current week
-          // 1=Sábado, 2=Domingo, 3=Segunda, 4=Terça, 5=Quarta, 6=Quinta, 7=Sexta
-          const offset = (e.dia_semana + 5) % 7;
+        data.eventos.forEach((e: any) => {
+          dayById.set(e.id.toString(), Number(e.dia_semana));
+        });
+
+        const mappedEvents: Event[] = data.eventos
+        .map((e: any) => {
+          // API usa 1=Domingo ... 7=Sábado
+          const day = Number(e.dia_semana);
+          if (day < 1 || day > 7) return null;
+          const offset = day - 1;
           const eventDate = new Date(weekStart);
           eventDate.setDate(weekStart.getDate() + offset);
 
@@ -244,23 +255,21 @@ const useData = () => {
             hora_inicio: e.hora_inicio,
             hora_fim: e.hora_fim
           };
-        });
+        })
+        .filter((event: Event | null): event is Event => event !== null);
 
         // Sort by dia_semana and hora_inicio
         mappedEvents.sort((a, b) => {
-          const dayA = data.eventos.find((ev: any) => ev.id.toString() === a.id).dia_semana;
-          const dayB = data.eventos.find((ev: any) => ev.id.toString() === b.id).dia_semana;
+          const dayA = dayById.get(a.id) ?? 99;
+          const dayB = dayById.get(b.id) ?? 99;
           
-          // Adjust dia_semana for sorting (Sun=0, Mon=1, ..., Sat=6)
-          const sortA = (dayA + 5) % 7;
-          const sortB = (dayB + 5) % 7;
-          
-          if (sortA !== sortB) return sortA - sortB;
+          if (dayA !== dayB) return dayA - dayB;
           return (a.hora_inicio || '').localeCompare(b.hora_inicio || '');
         });
 
         setEvents(mappedEvents);
-        setLastUpdate(new Date());
+        const generatedAt = new Date(data.gerado_em || Date.now());
+        setLastUpdate(Number.isNaN(generatedAt.getTime()) ? new Date() : generatedAt);
       }
     } catch (error) {
       console.error('Erro ao buscar eventos:', error);
