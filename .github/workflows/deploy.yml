@@ -27,7 +27,7 @@ jobs:
       - run: npm run build
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-          VITE_EVENTS_API_URL: ${{ vars.VITE_EVENTS_API_URL }}
+          VITE_EVENTS_API_URL: https://script.google.com/macros/s/AKfycbzHST8dAN9lWEAPzRiZ-B7CFE92AZntVhPYndbtAXNFEw6D3GDriLesygsYucTKhuVO/exec
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

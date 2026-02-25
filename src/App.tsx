@@ -71,10 +71,12 @@ interface Resource {
 interface RawEvent {
   id?: string | number;
   dia_semana?: string | number;
+  dia_num?: string | number;
   titulo?: string;
   descricao?: string;
   local?: string;
   link?: string;
+  horario?: string;
   hora_inicio?: string;
   hora_fim?: string;
   evento?: unknown;
@@ -93,6 +95,23 @@ const isEventEnabled = (value: unknown): boolean => {
 
   const normalized = toText(value).toLowerCase();
   return !['0', 'false', 'falso', 'nao', 'não', 'n', 'off'].includes(normalized);
+};
+
+const splitHorario = (value: unknown): { inicio?: string; fim?: string } => {
+  const raw = toText(value);
+  if (!raw) return {};
+
+  const range = raw.match(/(\d{1,2}:\d{2})\s*[-aAàÀ]\s*(\d{1,2}:\d{2})/);
+  if (range) {
+    return { inicio: range[1], fim: range[2] };
+  }
+
+  const single = raw.match(/^\d{1,2}:\d{2}$/);
+  if (single) {
+    return { inicio: raw };
+  }
+
+  return {};
 };
 
 // --- Mock Data ---
@@ -245,7 +264,7 @@ const useData = () => {
   const AUTO_REFRESH_MS = 30000;
   const EVENTS_API_URL =
     (import.meta.env.VITE_EVENTS_API_URL as string | undefined)?.trim() ||
-    'https://script.google.com/macros/s/AKfycbxgquoIWiLi3AfG9rQcQEULYkRIuCT0-y_j4Vi7aDqdpZek9WbcWUm9Ha4YNJZuUaX6/exec';
+    'https://script.google.com/macros/s/AKfycbzHST8dAN9lWEAPzRiZ-B7CFE92AZntVhPYndbtAXNFEw6D3GDriLesygsYucTKhuVO/exec';
 
   const fetchData = async () => {
     try {
@@ -269,17 +288,21 @@ const useData = () => {
         const dayById = new Map<string, number>();
 
         visibleEvents.forEach((e) => {
-          dayById.set(toText(e.id), Number(e.dia_semana));
+          dayById.set(toText(e.id), Number(e.dia_semana ?? e.dia_num));
         });
 
         const mappedEvents: Event[] = visibleEvents
         .map((e): Event | null => {
           // API usa 1=Domingo ... 7=Sábado
-          const day = Number(e.dia_semana);
+          const day = Number(e.dia_semana ?? e.dia_num);
           if (day < 1 || day > 7) return null;
           const offset = day - 1;
           const eventDate = new Date(weekStart);
           eventDate.setDate(weekStart.getDate() + offset);
+
+          const fallbackHorario = splitHorario(e.horario);
+          const horaInicio = toText(e.hora_inicio) || fallbackHorario.inicio;
+          const horaFim = toText(e.hora_fim) || fallbackHorario.fim;
 
           return {
             id: toText(e.id),
@@ -289,8 +312,8 @@ const useData = () => {
             description: toText(e.descricao),
             local: toText(e.local) || undefined,
             link: toText(e.link) || undefined,
-            hora_inicio: toText(e.hora_inicio) || undefined,
-            hora_fim: toText(e.hora_fim) || undefined
+            hora_inicio: horaInicio || undefined,
+            hora_fim: horaFim || undefined
           };
         })
         .filter((event: Event | null): event is Event => event !== null);

@@ -2,7 +2,7 @@
   'use strict';
 
   const API_URL =
-    'https://script.google.com/macros/s/AKfycbxgquoIWiLi3AfG9rQcQEULYkRIuCT0-y_j4Vi7aDqdpZek9WbcWUm9Ha4YNJZuUaX6/exec';
+    'https://script.google.com/macros/s/AKfycbzHST8dAN9lWEAPzRiZ-B7CFE92AZntVhPYndbtAXNFEw6D3GDriLesygsYucTKhuVO/exec';
   const REFRESH_INTERVAL_MS = 60_000;
 
   const DIA_SEMANA_MAP = {
