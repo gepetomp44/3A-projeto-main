@@ -216,6 +216,7 @@ const useData = () => {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const EVENTS_API_URL =
+    (import.meta.env.VITE_EVENTS_API_URL as string | undefined)?.trim() ||
     'https://script.google.com/macros/s/AKfycby8G0CUQ4tI-q7nrdB-9AXO90dxKSfyGJrfHc6Gd-xgXl-1M-hWmnowROFpEni4Rt1d/exec';
 
   const fetchData = async () => {
