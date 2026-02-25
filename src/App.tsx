@@ -68,6 +68,33 @@ interface Resource {
   links: { name: string; url: string }[];
 }
 
+interface RawEvent {
+  id?: string | number;
+  dia_semana?: string | number;
+  titulo?: string;
+  descricao?: string;
+  local?: string;
+  link?: string;
+  hora_inicio?: string;
+  hora_fim?: string;
+  evento?: unknown;
+  tem_evento?: unknown;
+  ativo?: unknown;
+  visivel?: unknown;
+  exibir?: unknown;
+}
+
+const toText = (value: unknown) => String(value ?? '').trim();
+
+const isEventEnabled = (value: unknown): boolean => {
+  if (value === undefined || value === null || toText(value) === '') return true;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+
+  const normalized = toText(value).toLowerCase();
+  return !['0', 'false', 'falso', 'nao', 'não', 'n', 'off'].includes(normalized);
+};
+
 // --- Mock Data ---
 
 const EVENTS: Event[] = [
@@ -215,9 +242,10 @@ const useData = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const AUTO_REFRESH_MS = 30000;
   const EVENTS_API_URL =
     (import.meta.env.VITE_EVENTS_API_URL as string | undefined)?.trim() ||
-    'https://script.google.com/macros/s/AKfycby8G0CUQ4tI-q7nrdB-9AXO90dxKSfyGJrfHc6Gd-xgXl-1M-hWmnowROFpEni4Rt1d/exec';
+    'https://script.google.com/macros/s/AKfycbxgquoIWiLi3AfG9rQcQEULYkRIuCT0-y_j4Vi7aDqdpZek9WbcWUm9Ha4YNJZuUaX6/exec';
 
   const fetchData = async () => {
     try {
@@ -225,19 +253,27 @@ const useData = () => {
       const separator = EVENTS_API_URL.includes('?') ? '&' : '?';
       const requestUrl = `${EVENTS_API_URL}${separator}_=${Date.now()}`;
       const response = await fetch(requestUrl, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Falha HTTP ${response.status}`);
+      }
       const data = await response.json();
       
-      if (data && data.eventos) {
+      if (data && Array.isArray(data.eventos)) {
+        const visibleEvents: RawEvent[] = data.eventos.filter((e: RawEvent) => {
+          const eventFlag = e.evento ?? e.tem_evento ?? e.ativo ?? e.visivel ?? e.exibir;
+          return isEventEnabled(eventFlag);
+        });
+
         const now = new Date();
         const weekStart = startOfWeek(now, { weekStartsOn: 0 });
         const dayById = new Map<string, number>();
 
-        data.eventos.forEach((e: any) => {
-          dayById.set(e.id.toString(), Number(e.dia_semana));
+        visibleEvents.forEach((e) => {
+          dayById.set(toText(e.id), Number(e.dia_semana));
         });
 
-        const mappedEvents: Event[] = data.eventos
-        .map((e: any) => {
+        const mappedEvents: Event[] = visibleEvents
+        .map((e): Event | null => {
           // API usa 1=Domingo ... 7=Sábado
           const day = Number(e.dia_semana);
           if (day < 1 || day > 7) return null;
@@ -246,15 +282,15 @@ const useData = () => {
           eventDate.setDate(weekStart.getDate() + offset);
 
           return {
-            id: e.id.toString(),
-            title: e.titulo,
+            id: toText(e.id),
+            title: toText(e.titulo) || 'Evento',
             date: format(eventDate, 'yyyy-MM-dd'),
             type: 'evento',
-            description: e.descricao,
-            local: e.local,
-            link: e.link,
-            hora_inicio: e.hora_inicio,
-            hora_fim: e.hora_fim
+            description: toText(e.descricao),
+            local: toText(e.local) || undefined,
+            link: toText(e.link) || undefined,
+            hora_inicio: toText(e.hora_inicio) || undefined,
+            hora_fim: toText(e.hora_fim) || undefined
           };
         })
         .filter((event: Event | null): event is Event => event !== null);
@@ -271,6 +307,8 @@ const useData = () => {
         setEvents(mappedEvents);
         const generatedAt = new Date(data.gerado_em || Date.now());
         setLastUpdate(Number.isNaN(generatedAt.getTime()) ? new Date() : generatedAt);
+      } else {
+        setEvents([]);
       }
     } catch (error) {
       console.error('Erro ao buscar eventos:', error);
@@ -281,8 +319,17 @@ const useData = () => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000); // Auto update every 60s
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchData, AUTO_REFRESH_MS);
+    const handleWindowFocus = () => {
+      fetchData();
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   }, []);
 
   return { events, loading, lastUpdate, refresh: fetchData };
