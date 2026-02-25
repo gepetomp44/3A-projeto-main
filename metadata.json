@@ -1,0 +1,5 @@
+{
+  "name": "Sala 3A - Portal da Turma",
+  "description": "Portal oficial da turma 3A com cronograma, eventos, recursos de estudo e integração social.",
+  "requestFramePermissions": ["geolocation"]
+}
